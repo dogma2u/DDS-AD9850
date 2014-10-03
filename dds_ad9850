@@ -1,0 +1,165 @@
+#include <LiquidCrystal.h>
+#include <Rotary.h>
+//  +5v   = 1 dds
+// pin 9  = 2 dds
+// pin 8  = 3 dds
+// pin 10 = 4 dds
+// pin 11 = 5 dds
+// gnd    = 6 dds
+// out    = 7 dds
+// out    = 8 dds
+// out sine= 9 dds
+
+// gnd    = 1 encoder Gnd
+// +5v    = 2 encoder +5v
+// pin A0 = 3 encoder switch
+// pin 2  = 4 encoder DT
+// pin 3  = 5 encoder clk
+
+//Display eone-1602a1
+// Gnd    = 1  VSS
+// +5v    = 2  VDD
+// pot/gnd= 3  V0
+// pin 12 = 4  RS
+// gnd    = 5  r/w
+// pin 13 = 6  E
+// n/c    = 7  D0
+// n/c    = 8  D1
+// n/c    = 9  D2
+// n/c    = 10 D3
+// pin 7  = 11 D4
+// pin 6  = 12 D5
+// pin 5  = 13 D6
+// pin 4  = 14 D7
+// +5v    = 15 LED A
+// Gnd    = 16 LED K
+
+//Setup some items
+#define W_CLK 8   // Pin 8 - connect to AD9850 module word load clock pin (CLK)
+#define FQ_UD 9   // Pin 9 - connect to freq update pin (FQ)
+#define DATA 10   // Pin 10 - connect to serial data load pin (DATA)
+#define RESET 11  // Pin 11 - connect to reset pin (RST) 
+#define pulseHigh(pin) {digitalWrite(pin, HIGH); digitalWrite(pin, LOW); }
+Rotary r = Rotary(2,3); // sets the pins the rotary encoder uses.  Must be interrupt pins. 
+LiquidCrystal lcd(12, 13, 7, 6, 5, 4); // I used an odd pin combination because I need pin 2 and 3 for the interrupts. 
+int_fast32_t rx=123456789; // Starting frequency of VFO
+int_fast32_t rx2=1; // variable to hold the updated frequency
+int_fast32_t increment = 1; // starting VFO update increment in HZ.
+int buttonstate = 0;
+String hertz = "0.1  Hz";
+int  hertzPosition = 4;
+byte tenths,ones,tens,hundreds,thousands,tenthousands,hundredthousands,millions ;  //Placeholders
+
+void setup() {
+  pinMode(A0,INPUT); // Connect to a button that goes to GND on push
+  digitalWrite(A0,HIGH);
+  lcd.begin(16, 2);
+  PCICR |= (1 << PCIE2);
+  PCMSK2 |= (1 << PCINT18) | (1 << PCINT19);
+  sei();
+  pinMode(FQ_UD, OUTPUT);
+  pinMode(W_CLK, OUTPUT);
+  pinMode(DATA, OUTPUT);
+  pinMode(RESET, OUTPUT); 
+  pulseHigh(RESET);
+  pulseHigh(W_CLK);
+  pulseHigh(FQ_UD);  // this pulse enables serial mode on the AD9850 - Datasheet page 12.
+  lcd.setCursor(hertzPosition,1);    
+  lcd.print(hertz);
+}
+
+ISR(PCINT2_vect) {
+  unsigned char result = r.process();
+  if (result) {    
+    if (result == DIR_CW){rx=rx+increment;}
+    else {rx=rx-increment;};       
+      if (rx >=300000001){rx=rx2;}; // UPPER VFO LIMIT
+      if (rx <=9){rx=rx2;}; // LOWER VFO LIMIT
+  }
+}
+
+
+
+// frequency calc from datasheet page 8 = <sys clock> * <frequency tuning word>/2^32
+void sendFrequency(double frequency) {  
+  int32_t freq = frequency * 4294967295/124998900;  // note 125 MHz clock on 9850.  You can make 'slight' tuning variations here by adjusting the clock frequency.
+  for (int b=0; b<4; b++, freq>>=8) {
+    tfr_byte(freq & 0xFF);
+  }
+  tfr_byte(0x000);   // Final control byte, all 0 for 9850 chip
+  pulseHigh(FQ_UD);  // Done!  Should see output
+}
+// transfers a byte, a bit at a time, LSB first to the 9850 via serial DATA line
+void tfr_byte(byte data)
+{
+  for (int i=0; i<8; i++, data>>=1) {
+    digitalWrite(DATA, data & 0x01);
+    pulseHigh(W_CLK);   //after each bit sent, CLK is pulsed high
+  }
+}
+
+
+
+void setincrement(){
+  if(increment == 1){increment = 10; hertz = "1  Hz"; hertzPosition=6;}
+  else if (increment == 10){increment = 100;  hertz = "10  Hz"; hertzPosition=5;}
+  else if (increment == 100){increment = 1000; hertz="100  Hz"; hertzPosition=4;}
+  else if (increment == 1000){increment = 10000; hertz="1 KHz"; hertzPosition=6;}
+  else if (increment == 10000){increment = 100000; hertz="10 KHz"; hertzPosition=5;}
+  else if (increment == 100000){increment = 1000000; hertz="100 KHz"; hertzPosition=4;} 
+  else if (increment == 1000000){increment = 10000000; hertz="1 MHz"; hertzPosition=6;} 
+  else if (increment == 10000000){increment = 100000000; hertz="10 MHz"; hertzPosition=5;}
+  else{increment = 1; hertz = "0.1  Hz"; hertzPosition=4;};  
+   lcd.setCursor(0,1);
+   lcd.print("                ");
+   lcd.setCursor(hertzPosition,1); 
+   lcd.print(hertz); 
+   delay(500); // Adjust this delay to speed up/slow down the button menu scroll speed.
+};
+
+
+void showFreq(){
+    millions =  int (rx/10000000);
+    hundredthousands =  ((rx/1000000)%10);
+    tenthousands = ((rx/100000)%10);
+    thousands = ((rx/10000)%10);
+    hundreds = ((rx/1000)%10);
+    tens = ((rx/100)%10);
+    ones = ((rx/10)%10);
+    tenths = ((rx/1)%10);
+    lcd.setCursor(0,0);
+    lcd.print("                ");
+   if (millions > 9){lcd.setCursor(1,0);}
+    else{lcd.setCursor(2,0);}
+   if (millions > 0){lcd.print(millions);lcd.print(",");}
+    else{lcd.setCursor(4,0);}
+   if (millions == 0 && hundredthousands == 0){lcd.setCursor(5,0);}
+    else{lcd.print(hundredthousands);}
+   if (millions == 0 && hundredthousands == 0 && tenthousands == 0){lcd.setCursor(6,0);}
+    else{lcd.print(tenthousands);} 
+   if (millions == 0 && hundredthousands == 0 && tenthousands == 0 && thousands == 0){lcd.setCursor(8,0);}
+    else{lcd.print(thousands); lcd.print(",");} 
+   if (millions == 0 && hundredthousands == 0 && tenthousands == 0 && thousands == 0 && hundreds == 0){lcd.setCursor(9,0);}
+    else{lcd.print(hundreds);} 
+   if (millions == 0 && hundredthousands == 0 && tenthousands == 0 && thousands == 0 && hundreds == 0 && tens == 0){lcd.setCursor(10,0);}
+    else{lcd.print(tens);} 
+    lcd.print(ones);
+    lcd.print(".");
+    lcd.print(tenths);
+    lcd.print(" Hz  ");  
+};
+
+void loop() {
+  if (rx != rx2){    
+        showFreq();
+        float rxtenths = rx;
+        sendFrequency(rxtenths/10);
+        rx2 = rx;
+      } 
+      
+  buttonstate = digitalRead(A0);
+  if(buttonstate == LOW) {
+        setincrement();        
+    };
+  
+}
