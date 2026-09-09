@@ -1,3 +1,7 @@
+# DDS-AD9850 for ARDUINO testing
+
+[![Compile](https://github.com/dogma2u/DDS-AD9850/actions/workflows/compile.yml/badge.svg)](https://github.com/dogma2u/DDS-AD9850/actions/workflows/compile.yml)
+
 DDS-AD9850 for ARDUINO testing
 ==========
 
