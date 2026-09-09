@@ -1,0 +1,38 @@
+# Compile DDS-AD9850 for Arduino Uno (ATmega328, same target as lab build).
+# Does not upload or run on hardware.
+
+name: Compile
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install AVR core and libraries
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr
+          mkdir -p "$HOME/Arduino/libraries/Rotary"
+          curl -fsSL -o /tmp/Rotary.zip "http://www.buxtronix.net/libraries/Rotary/Rotary.zip"
+          unzip -o /tmp/Rotary.zip -d "$HOME/Arduino/libraries/Rotary"
+
+      - name: Prepare sketch folder
+        run: |
+          mkdir -p dds_ad9850
+          cp dds_ad9850 dds_ad9850/dds_ad9850.ino
+
+      - name: Compile sketch
+        run: |
+          arduino-cli compile --fqbn arduino:avr:uno dds_ad9850
