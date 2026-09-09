@@ -30,9 +30,9 @@ jobs:
 
       - name: Prepare sketch folder
         run: |
-          mkdir -p dds_ad9850
-          cp dds_ad9850 dds_ad9850/dds_ad9850.ino
+          mkdir -p sketch
+          cp dds_ad9850 sketch/dds_ad9850.ino
 
       - name: Compile sketch
         run: |
-          arduino-cli compile --fqbn arduino:avr:uno dds_ad9850
+          arduino-cli compile --fqbn arduino:avr:uno sketch
