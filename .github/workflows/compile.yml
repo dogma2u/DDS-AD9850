@@ -22,8 +22,12 @@ jobs:
 
       - name: Install AVR core and libraries
         run: |
+          arduino-cli config init --overwrite
+          arduino-cli config set directories.user "$HOME/Arduino"
           arduino-cli core update-index
           arduino-cli core install arduino:avr
+          arduino-cli lib update-index
+          arduino-cli lib install "LiquidCrystal"
           mkdir -p "$HOME/Arduino/libraries"
           git clone --depth 1 https://github.com/buxtronix/arduino.git /tmp/buxtronix-arduino
           cp -r /tmp/buxtronix-arduino/libraries/Rotary "$HOME/Arduino/libraries/Rotary"
